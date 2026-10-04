@@ -2,7 +2,7 @@ import json
 
 from app.services.llm import client
 from app.tools.calculator import calculate
-from app.tools.file_reader import read_text_file
+from app.tools.file_reader import read_document
 
 
 CALCULATOR_TOOL = {
@@ -33,17 +33,17 @@ CALCULATOR_TOOL = {
 }
 
 
-FILE_READER_TOOL = {
+DOCUMENT_READER_TOOL = {
     "type": "function",
     "function": {
-        "name": "read_text_file",
-        "description": "Read the contents of a UTF-8 text file.",
+        "name": "read_document",
+        "description": "Read the text content of a TXT, PDF, or DOCX document.",
         "parameters": {
             "type": "object",
             "properties": {
                 "file_path": {
                     "type": "string",
-                    "description": "Path to the .txt file to read.",
+                    "description": "Path to the TXT, PDF, or DOCX document to read.",
                 },
             },
             "required": ["file_path"],
@@ -54,7 +54,7 @@ FILE_READER_TOOL = {
 
 TOOLS = [
     CALCULATOR_TOOL,
-    FILE_READER_TOOL,
+    DOCUMENT_READER_TOOL,
 ]
 
 
@@ -100,8 +100,8 @@ def run_agent(user_message: str) -> str:
                 operation=arguments["operation"],
             )
 
-        elif tool_call.function.name == "read_text_file":
-            result = read_text_file(
+        elif tool_call.function.name == "read_document":
+            result = read_document(
                 file_path=arguments["file_path"],
             )
 
