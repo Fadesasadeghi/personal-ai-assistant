@@ -2,6 +2,7 @@ import json
 
 from app.services.llm import client
 from app.tools.calculator import calculate
+from app.tools.file_reader import read_text_file
 
 
 CALCULATOR_TOOL = {
@@ -32,6 +33,31 @@ CALCULATOR_TOOL = {
 }
 
 
+FILE_READER_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "read_text_file",
+        "description": "Read the contents of a UTF-8 text file.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "file_path": {
+                    "type": "string",
+                    "description": "Path to the .txt file to read.",
+                },
+            },
+            "required": ["file_path"],
+        },
+    },
+}
+
+
+TOOLS = [
+    CALCULATOR_TOOL,
+    FILE_READER_TOOL,
+]
+
+
 def run_agent(user_message: str) -> str:
     messages = [
         {
@@ -50,7 +76,7 @@ def run_agent(user_message: str) -> str:
     response = client.chat.completions.create(
         model="openai/gpt-oss-120b",
         messages=messages,
-        tools=[CALCULATOR_TOOL],
+        tools=TOOLS,
         tool_choice="auto",
     )
 
@@ -65,29 +91,39 @@ def run_agent(user_message: str) -> str:
         print(f"[Agent] Tool selected: {tool_call.function.name}")
         print(f"[Agent] Arguments: {tool_call.function.arguments}")
 
-        if tool_call.function.name == "calculate":
-            arguments = json.loads(tool_call.function.arguments)
+        arguments = json.loads(tool_call.function.arguments)
 
+        if tool_call.function.name == "calculate":
             result = calculate(
                 a=arguments["a"],
                 b=arguments["b"],
                 operation=arguments["operation"],
             )
 
-            print(f"[Tool] Result: {result}")
-
-            messages.append(
-                {
-                    "role": "tool",
-                    "tool_call_id": tool_call.id,
-                    "content": str(result),
-                }
+        elif tool_call.function.name == "read_text_file":
+            result = read_text_file(
+                file_path=arguments["file_path"],
             )
+
+        else:
+            raise ValueError(
+                f"Unknown tool: {tool_call.function.name}"
+            )
+
+        print(f"[Tool] Result: {result}")
+
+        messages.append(
+            {
+                "role": "tool",
+                "tool_call_id": tool_call.id,
+                "content": str(result),
+            }
+        )
 
     final_response = client.chat.completions.create(
         model="openai/gpt-oss-120b",
         messages=messages,
-        tools=[CALCULATOR_TOOL],
+        tools=TOOLS,
     )
 
     return final_response.choices[0].message.content or ""
