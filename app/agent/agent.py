@@ -1,61 +1,10 @@
 import json
 
 from app.services.llm import client
-from app.tools.calculator import calculate
-from app.tools.file_reader import read_document
+from app.tools.registry import TOOL_DEFINITIONS, execute_tool
 
 
-CALCULATOR_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "calculate",
-        "description": "Perform a basic arithmetic calculation.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "a": {
-                    "type": "number",
-                    "description": "The first number.",
-                },
-                "b": {
-                    "type": "number",
-                    "description": "The second number.",
-                },
-                "operation": {
-                    "type": "string",
-                    "enum": ["add", "subtract", "multiply", "divide"],
-                    "description": "The arithmetic operation to perform.",
-                },
-            },
-            "required": ["a", "b", "operation"],
-        },
-    },
-}
-
-
-DOCUMENT_READER_TOOL = {
-    "type": "function",
-    "function": {
-        "name": "read_document",
-        "description": "Read the text content of a TXT, PDF, or DOCX document.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "file_path": {
-                    "type": "string",
-                    "description": "Path to the TXT, PDF, or DOCX document to read.",
-                },
-            },
-            "required": ["file_path"],
-        },
-    },
-}
-
-
-TOOLS = [
-    CALCULATOR_TOOL,
-    DOCUMENT_READER_TOOL,
-]
+MODEL = "openai/gpt-oss-120b"
 
 
 def run_agent(user_message: str) -> str:
@@ -74,9 +23,9 @@ def run_agent(user_message: str) -> str:
     ]
 
     response = client.chat.completions.create(
-        model="openai/gpt-oss-120b",
+        model=MODEL,
         messages=messages,
-        tools=TOOLS,
+        tools=TOOL_DEFINITIONS,
         tool_choice="auto",
     )
 
@@ -88,42 +37,33 @@ def run_agent(user_message: str) -> str:
     messages.append(assistant_message)
 
     for tool_call in assistant_message.tool_calls:
-        print(f"[Agent] Tool selected: {tool_call.function.name}")
-        print(f"[Agent] Arguments: {tool_call.function.arguments}")
-
+        tool_name = tool_call.function.name
         arguments = json.loads(tool_call.function.arguments)
 
-        if tool_call.function.name == "calculate":
-            result = calculate(
-                a=arguments["a"],
-                b=arguments["b"],
-                operation=arguments["operation"],
-            )
+        print(f"[Agent] Tool selected: {tool_name}")
+        print(f"[Agent] Arguments: {arguments}")
 
-        elif tool_call.function.name == "read_document":
-            result = read_document(
-                file_path=arguments["file_path"],
-            )
+        result = execute_tool(tool_name, arguments)
 
-        else:
-            raise ValueError(
-                f"Unknown tool: {tool_call.function.name}"
-            )
+        result_text = str(result)
 
-        print(f"[Tool] Result: {result}")
+        print(
+            f"[Tool] Result preview: "
+            f"{result_text[:500]}"
+        )
 
         messages.append(
             {
                 "role": "tool",
                 "tool_call_id": tool_call.id,
-                "content": str(result),
+                "content": result_text,
             }
         )
 
     final_response = client.chat.completions.create(
-        model="openai/gpt-oss-120b",
+        model=MODEL,
         messages=messages,
-        tools=TOOLS,
+        tools=TOOL_DEFINITIONS,
     )
 
     return final_response.choices[0].message.content or ""
